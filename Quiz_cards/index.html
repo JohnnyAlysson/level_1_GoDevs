@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuizTime</title>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@3.7.3/dist/full.css" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .card-image {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            border-top-left-radius: 0.5rem;
+            border-top-right-radius: 0.5rem;
+            background-color: #374151;
+        }
+        .option-card {
+            background-color: #2D3748;
+            transition: all 0.3s ease;
+        }
+        .option-card:hover {
+            background-color: #4A5568;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 min-h-screen flex flex-col items-center justify-center p-4">
+    <div class="max-w-4xl w-full bg-gray-800 shadow-xl rounded-lg p-6">
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-3xl font-bold text-white flex items-center">
+                <span class="mr-2">👋</span> QuizTime
+            </h1>
+            <div id="score" class="bg-green-600 text-white px-3 py-1 rounded-full"></div>
+        </div>
+        
+        <div id="quizContainer">
+            <h2 id="questionText" class="text-2xl font-bold text-white text-center mb-8"></h2>
+            <div id="optionsContainer" class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6"></div>
+            <div id="feedback" class="text-center font-bold mb-4 hidden"></div>
+            <div class="flex justify-between items-center mt-4">
+                <button id="prevQuestion" class="btn btn-ghost text-gray-400">PREVIOUS</button>
+                <span id="questionNumber" class="text-gray-400"></span>
+                <button id="nextQuestion" class="btn btn-ghost text-gray-400">NEXT</button>
+            </div>
+            <div class="mt-4 text-center">
+                <button id="resetQuiz" class="btn btn-primary">Reset Quiz</button>
+                <button id="addQuestion" class="btn btn-secondary ml-2">Add Question</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for adding questions -->
+    <div id="addQuestionModal" class="modal">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg">Add a New Question</h3>
+            <input type="text" id="newQuestionText" placeholder="Enter question" class="input input-bordered w-full mt-4">
+            <div id="optionInputs" class="mt-4">
+                <div class="option-input mb-2">
+                    <input type="text" placeholder="Option text" class="input input-bordered w-full mb-1">
+                    <input type="file" accept="image/*" class="file-input file-input-bordered w-full">
+                    <label class="label cursor-pointer justify-start">
+                        <input type="radio" name="correct-answer" class="radio radio-primary mr-2">
+                        <span class="label-text">Correct Answer</span>
+                    </label>
+                </div>
+            </div>
+            <button id="addOptionBtn" class="btn btn-outline btn-sm mt-2">Add Another Option</button>
+            <div class="modal-action">
+                <button id="saveQuestionBtn" class="btn btn-primary">Save Question</button>
+                <button id="closeModalBtn" class="btn">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const quizContainer = document.getElementById('quizContainer');
+        const questionText = document.getElementById('questionText');
+        const optionsContainer = document.getElementById('optionsContainer');
+        const feedbackDiv = document.getElementById('feedback');
+        const scoreDiv = document.getElementById('score');
+        const prevQuestionBtn = document.getElementById('prevQuestion');
+        const nextQuestionBtn = document.getElementById('nextQuestion');
+        const questionNumberSpan = document.getElementById('questionNumber');
+        const resetQuizBtn = document.getElementById('resetQuiz');
+        const addQuestionBtn = document.getElementById('addQuestion');
+        const addQuestionModal = document.getElementById('addQuestionModal');
+        const newQuestionText = document.getElementById('newQuestionText');
+        const optionInputs = document.getElementById('optionInputs');
+        const addOptionBtn = document.getElementById('addOptionBtn');
+        const saveQuestionBtn = document.getElementById('saveQuestionBtn');
+        const closeModalBtn = document.getElementById('closeModalBtn');
+
+        let currentQuestion = 0;
+        let score = 0;
+        let questions = [];
+
+        const PLACEHOLDER_IMAGE = 'https://placeholder.pics/svg/300';
+
+        function loadQuestions() {
+            const storedQuestions = localStorage.getItem('quizQuestions');
+            if (storedQuestions) {
+                questions = JSON.parse(storedQuestions);
+            } else {
+                questions = [
+                    {
+                        question: "1 - Qual era o objetivo da personagem?",
+                        options: [
+                            { text: "Caçar tesouros", correct: false, image: PLACEHOLDER_IMAGE },
+                            { text: "Ter mais tempo para ler livros", correct: true, image: PLACEHOLDER_IMAGE },
+                            { text: "Navegar pelos 7 mares", correct: false, image: PLACEHOLDER_IMAGE }
+                        ]
+                    }
+                ];
+                saveQuestions();
+            }
+        }
+
+        function saveQuestions() {
+            localStorage.setItem('quizQuestions', JSON.stringify(questions));
+        }
+
+        function showQuestion() {
+            if (questions.length === 0) return;
+            const question = questions[currentQuestion];
+            questionText.textContent = question.question;
+            optionsContainer.innerHTML = '';
+            feedbackDiv.classList.add('hidden');
+
+            question.options.forEach((option, index) => {
+                const card = document.createElement('div');
+                card.className = 'option-card rounded-lg shadow-xl cursor-pointer overflow-hidden';
+                card.innerHTML = `
+                    <img class="card-image" src="${option.image}" alt="">
+                    <div class="p-4 text-center">
+                        <p class="text-white">${option.text}</p>
+                    </div>
+                `;
+                card.addEventListener('click', () => checkAnswer(option.correct));
+                optionsContainer.appendChild(card);
+            });
+
+            updateNavButtons();
+            updateQuestionNumber();
+        }
+
+        function checkAnswer(isCorrect) {
+            feedbackDiv.classList.remove('hidden');
+            if (isCorrect) {
+                feedbackDiv.textContent = 'Correct!';
+                feedbackDiv.className = 'text-center font-bold mb-4 text-green-500';
+                score++;
+            } else {
+                feedbackDiv.textContent = 'Incorrect!';
+                feedbackDiv.className = 'text-center font-bold mb-4 text-red-500';
+            }
+            updateScore();
+            disableOptions();
+        }
+
+        function disableOptions() {
+            const options = optionsContainer.children;
+            for (let option of options) {
+                option.classList.remove('cursor-pointer');
+                option.classList.add('opacity-50');
+                option.style.pointerEvents = 'none';
+            }
+        }
+
+        function enableOptions() {
+            const options = optionsContainer.children;
+            for (let option of options) {
+                option.classList.add('cursor-pointer');
+                option.classList.remove('opacity-50');
+                option.style.pointerEvents = 'auto';
+            }
+        }
+
+        function updateNavButtons() {
+            prevQuestionBtn.disabled = currentQuestion === 0;
+            nextQuestionBtn.disabled = currentQuestion === questions.length - 1;
+        }
+
+        function updateQuestionNumber() {
+            questionNumberSpan.textContent = `${currentQuestion + 1} / ${questions.length}`;
+        }
+
+        function updateScore() {
+            scoreDiv.textContent = `✓ ${score}`;
+        }
+
+        function resetQuiz() {
+            currentQuestion = 0;
+            score = 0;
+            showQuestion();
+            updateScore();
+            feedbackDiv.classList.add('hidden');
+            enableOptions();
+        }
+
+        function addOptionInput() {
+            const optionDiv = document.createElement('div');
+            optionDiv.className = 'option-input mb-2';
+            optionDiv.innerHTML = `
+                <input type="text" placeholder="Option text" class="input input-bordered w-full mb-1">
+                <input type="file" accept="image/*" class="file-input file-input-bordered w-full">
+                <label class="label cursor-pointer justify-start">
+                    <input type="radio" name="correct-answer" class="radio radio-primary mr-2">
+                    <span class="label-text">Correct Answer</span>
+                </label>
+            `;
+            optionInputs.appendChild(optionDiv);
+        }
+
+        function showModal() {
+            addQuestionModal.classList.add('modal-open');
+        }
+
+        function closeModal() {
+            addQuestionModal.classList.remove('modal-open');
+            newQuestionText.value = '';
+            optionInputs.innerHTML = '';
+            addOptionInput(); 
+        }
+
+        async function saveQuestion() {
+            const questionText = newQuestionText.value;
+            const optionElements = optionInputs.querySelectorAll('.option-input');
+            const options = [];
+
+            for (let optionElement of optionElements) {
+                const text = optionElement.querySelector('input[type="text"]').value;
+                const imageFile = optionElement.querySelector('input[type="file"]').files[0];
+                const correct = optionElement.querySelector('input[type="radio"]').checked;
+
+                let imageUrl = PLACEHOLDER_IMAGE; 
+                if (imageFile) {
+                    imageUrl = await readFileAsDataURL(imageFile);
+                }
+
+                options.push({ text, image: imageUrl, correct });
+            }
+
+            questions.push({ question: questionText, options });
+            saveQuestions();
+            closeModal();
+            showQuestion();
+        }
+
+        function readFileAsDataURL(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        prevQuestionBtn.addEventListener('click', () => {
+            if (currentQuestion > 0) {
+                currentQuestion--;
+                showQuestion();
+            }
+        });
+
+        nextQuestionBtn.addEventListener('click', () => {
+            if (currentQuestion < questions.length - 1) {
+                currentQuestion++;
+                showQuestion();
+            }
+        });
+
+        resetQuizBtn.addEventListener('click', resetQuiz);
+        addQuestionBtn.addEventListener('click', showModal);
+        closeModalBtn.addEventListener('click', closeModal);
+        addOptionBtn.addEventListener('click', addOptionInput);
+        saveQuestionBtn.addEventListener('click', saveQuestion);
+
+        loadQuestions();
+        showQuestion();
+        updateScore();
+        addOptionInput(); 
+    </script>
+</body>
+</html>
